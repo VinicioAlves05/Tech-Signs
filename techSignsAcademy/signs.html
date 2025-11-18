@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TechSigns - Demonstração em Tempo Real</title>
+  <link rel="stylesheet" href="signs.css">
+</head>
+<body>
+ 
+  <header>
+    <nav>
+      <a href="landing-page.html" class="nav-back" onclick="history.back(); return false;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Voltar</span>
+      </a>
+      
+      <div class="nav-brand">
+        <img src="techsings.png" alt="TechSigns">
+        <span>TechSigns</span>
+      </div>
+    </nav>
+  </header>
+
+ 
+  <main>
+    <div class="header-text">
+      <h1>Demonstração em Tempo Real</h1>
+      <p>Ative sua câmera e faça sinais de Libras para interpretação instantânea</p>
+    </div>
+
+    <div class="grid-container">
+      
+      <div>
+        <div class="camera-container">
+          <div class="video-wrapper">
+            <div class="camera-placeholder" id="cameraPlaceholder">
+              <svg class="camera-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+              <p>Câmera desativada</p>
+              <button class="btn-primary" onclick="startCamera()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                </svg>
+                Ativar Câmera
+              </button>
+            </div>
+            <video id="videoElement" autoplay playsinline muted></video>
+            <canvas id="canvasElement" class="hidden"></canvas>
+            <div class="live-badge" id="liveBadge" style="display: none;">
+              <span class="pulse"></span>
+              AO VIVO
+            </div>
+          </div>
+          
+         
+          <div class="controls hidden" id="controls">
+            <button class="btn-primary" id="captureBtn" onclick="captureAndAnalyze()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+              <span id="captureBtnText">Capturar e Analisar</span>
+            </button>
+            <button class="btn-secondary" onclick="stopCamera()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="6 3 20 12 6 21 6 3"></polygon>
+              </svg>
+              Desativar
+            </button>
+          </div>
+        </div>
+
+       
+        <div class="interpretation-box hidden" id="interpretationBox">
+          <div class="interpretation-label">Última interpretação:</div>
+          <div class="interpretation-text" id="interpretationText"></div>
+        </div>
+      </div>
+
+    
+      <div class="sidebar">
+     
+        <div class="history-panel">
+          <h3 class="panel-title">Histórico</h3>
+          <div id="historyContainer">
+            <div class="history-empty">Nenhuma interpretação ainda</div>
+          </div>
+        </div>
+
+      
+        <div class="info-panel">
+          <h3 class="panel-title">Como usar</h3>
+          <div class="info-steps">
+            <div class="info-step">
+              <span class="step-number">1</span>
+              <span>Ative sua câmera clicando no botão</span>
+            </div>
+            <div class="info-step">
+              <span class="step-number">2</span>
+              <span>Posicione suas mãos no enquadramento</span>
+            </div>
+            <div class="info-step">
+              <span class="step-number">3</span>
+              <span>Clique em "Capturar e Analisar"</span>
+            </div>
+            <div class="info-step">
+              <span class="step-number">4</span>
+              <span>Veja a interpretação em tempo real</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let isStreaming = false;
+    let isAnalyzing = false;
+    let history = [];
+    let streamRef = null;
+
+    const API_BASE_URL = 'http://localhost:8080/api';
+
+    const videoElement = document.getElementById('videoElement');
+    const canvasElement = document.getElementById('canvasElement');
+    const cameraPlaceholder = document.getElementById('cameraPlaceholder');
+    const controls = document.getElementById('controls');
+    const liveBadge = document.getElementById('liveBadge');
+    const interpretationBox = document.getElementById('interpretationBox');
+    const interpretationText = document.getElementById('interpretationText');
+    const captureBtn = document.getElementById('captureBtn');
+    const captureBtnText = document.getElementById('captureBtnText');
+    const historyContainer = document.getElementById('historyContainer');
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        
+        videoElement.srcObject = stream;
+        streamRef = stream;
+        isStreaming = true;
+
+        cameraPlaceholder.classList.add('hidden');
+        videoElement.classList.add('active');
+        controls.classList.remove('hidden');
+        liveBadge.style.display = 'flex';
+      } catch (error) {
+        console.error('Erro ao acessar câmera:', error);
+        alert('Não foi possível acessar a câmera. Por favor, verifique as permissões.');
+      }
+    }
+
+    function stopCamera() {
+      if (streamRef) {
+        streamRef.getTracks().forEach(track => track.stop());
+        streamRef = null;
+      }
+      
+      videoElement.srcObject = null;
+      isStreaming = false;
+
+      cameraPlaceholder.classList.remove('hidden');
+      videoElement.classList.remove('active');
+      controls.classList.add('hidden');
+      liveBadge.style.display = 'none';
+    }
+
+    async function captureAndAnalyze() {
+      if (!videoElement || !canvasElement) return;
+
+      isAnalyzing = true;
+      captureBtn.disabled = true;
+      captureBtnText.textContent = 'Analisando...';
+
+    
+      const canvas = canvasElement;
+      const video = videoElement;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+
+      if (ctx) {
+        ctx.drawImage(video, 0, 0);
+
+       
+        const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/sign-language/interpret`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+              frameBase64: base64Image
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`API Error: ${response.status} ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          console.log('[v0] API Response:', data);
+
+          if (data.success && data.interpretation) {
+            interpretationText.textContent = data.interpretation;
+            interpretationBox.classList.remove('hidden');
+            
+           
+            history.unshift(`${data.interpretation} (Confiança: ${(data.confidence * 100).toFixed(0)}%)`);
+            if (history.length > 10) {
+              history.pop();
+            }
+            updateHistory();
+          } else {
+            interpretationText.textContent = data.error || 'Erro ao processar a imagem. Tente novamente.';
+            interpretationBox.classList.remove('hidden');
+          }
+        } catch (error) {
+          console.error('[v0] Erro ao analisar:', error);
+          
+         
+          if (error.message.includes('Failed to fetch')) {
+            interpretationText.textContent = '⚠️ API Backend não disponível. Certifique-se que o servidor Java está rodando em http://localhost:8080';
+          } else {
+            interpretationText.textContent = 'Erro ao processar: ' + error.message;
+          }
+          interpretationBox.classList.remove('hidden');
+        } finally {
+          isAnalyzing = false;
+          captureBtn.disabled = false;
+          captureBtnText.textContent = 'Capturar e Analisar';
+        }
+      }
+    }
+
+    function updateHistory() {
+      if (history.length === 0) {
+        historyContainer.innerHTML = '<div class="history-empty">Nenhuma interpretação ainda</div>';
+        return;
+      }
+
+      historyContainer.innerHTML = history.map((item, index) => `
+        <div class="history-item">
+          <div class="history-item-number">#${history.length - index}</div>
+          <div class="history-item-text">${item}</div>
+        </div>
+      `).join('');
+    }
+
+    async function checkAPIHealth() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/sign-language/health`);
+        const data = await response.text();
+        console.log('[v0] API Health Check:', data);
+      } catch (error) {
+        console.warn('[v0] API Backend não disponível. Conecte a URL correta em capturAndAnalyze()');
+      }
+    }
+
+   
+    window.addEventListener('load', checkAPIHealth);
+
+    
+    window.addEventListener('beforeunload', stopCamera);
+  </script>
+</body>
+</html>
